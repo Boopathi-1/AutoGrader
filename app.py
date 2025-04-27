@@ -3,17 +3,17 @@ import pandas as pd
 import requests
 import sentence_transformers
 import numpy as np
-import os
+import os  # Import os for environment variables
 from db import create_db, insert_marks, get_all_marks
-
-# Set page configuration (this must be the first Streamlit command)
-st.set_page_config(page_title="AutoGrader AI", page_icon="📘", layout="wide")
 
 # Create database
 create_db()
 
 # Load Sentence-BERT model for answer similarity
-model = sentence_transformers.SentenceTransformer('paraphrase-MiniLM-L6-v2')
+model = sentence_transformers.SentenceTransformer('all-MiniLM-L6-v2')
+
+# Page setup
+st.set_page_config(page_title="AutoGrader AI", page_icon="📘", layout="wide")
 
 # Custom CSS
 st.markdown("""
@@ -33,7 +33,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- LLaMA 3 API Setup ---
-LLAMA_API_KEY = st.secrets["genral"]["llama_api_key"]  # Replace with your actual LLaMA API key
+LLAMA_API_KEY = "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"# Fetch API key from Streamlit secrets
 LLAMA_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 LLAMA_MODEL = "meta-llama/llama-3-8b-instruct"
 
@@ -122,59 +122,13 @@ def get_llama_feedback(student_name, model_answer, student_answer, score):
     except Exception as e:
         return f"⚠️ LLaMA API error: {e}"
 
-# Create a folder for storing sample files
-sample_directory = "uploads"
-if not os.path.exists(sample_directory):
-    os.makedirs(sample_directory)
-
-# Path for the sample CSV file
-sample_file_path = os.path.join(sample_directory, "sample_data.csv")
-
-# Sample CSV content
-sample_data = """
-Name,Q1,Q2,Q3,Q4,Q5
-Student1,"Machine Learning is a subset of AI.","Supervised learning is when a model learns from labeled data.","Overfitting happens when the model learns noise in the data.","Gradient descent is an optimization technique for minimizing errors.","A neural network mimics the human brain, consisting of layers of nodes."
-Student2,"Machine learning is a subset of AI that allows machines to learn from data.","Supervised learning involves learning from labeled data.","Overfitting happens when the model fits noise in the data.","Gradient descent minimizes the loss function by adjusting parameters.","A neural network is a model inspired by the human brain with multiple layers of nodes."
-"""
-
-# Function to create and save the sample file
-def create_sample_file():
-    with open(sample_file_path, "w") as file:
-        file.write(sample_data)
-
-# Function to simulate file upload
-def auto_upload_sample_file():
-    if os.path.exists(sample_file_path):
-        df = pd.read_csv(sample_file_path)
-        return df
-    else:
-        st.error("Sample file does not exist!")
-        return None
-
-# Streamlit page setup
-# Title and description
-st.title("📘 AutoGrader AI - Sample Upload")
-st.markdown("""
-    This app allows you to automatically upload a sample file with student answers.
-    Click the button below to upload a sample CSV file and process it.
-""")
-
-# Button for automatic file upload
-if st.button("Auto Sample Upload"):
-    # Create the sample file if it doesn't exist
-    if not os.path.exists(sample_file_path):
-        create_sample_file()
-
-    # Simulate file upload and processing
-    uploaded_file = auto_upload_sample_file()
-    
-    if uploaded_file is not None:
-        st.write(f"📥 Sample file uploaded successfully!")
-        st.write(uploaded_file)
-
 # --- Main Page ---
 def main():
-    st.markdown("""<h1>📘 AutoGrader AI - Powered by LLaMA 3 🦙</h1>""", unsafe_allow_html=True)
+    st.markdown("""
+        <h1>📘 AutoGrader AI - Powered by LLaMA 3 🦙</h1>
+        <h5>Batch grading with instant, intelligent feedback for each student!</h5>
+        <hr>
+    """, unsafe_allow_html=True)
     
     if "username" not in st.session_state:
         # If no user is logged in, show the login page
@@ -219,24 +173,50 @@ def main():
                 feedback = get_llama_feedback(student_name, q['model_answer'], student_answer, score)
 
                 row_result[f"{q_key}_Score"] = score
-                row_result[f"{q_key}_Similarity"] = similarity
+                row_result[f"{q_key}_Similarity"] = round(similarity, 2)
                 row_result[f"{q_key}_Feedback"] = feedback
-
                 total_score += score
 
             row_result["Total_Score"] = total_score
             output_data.append(row_result)
 
+            # Insert total score into the database
+            insert_marks(student_name, total_score)
+
+            # Update progress
             progress.progress((index + 1) / len(df))
 
-        # Display the results
-        result_df = pd.DataFrame(output_data)
-        st.write(result_df)
+        output_df = pd.DataFrame(output_data)
+        
+        # Display Summary and Individual Feedback
+        st.success("✅ Grading complete!")
+        st.markdown("### 📊 Results Overview")
+        
+        for idx, row in output_df.iterrows():
+            student_name = row['Name']
+            total_score = row["Total_Score"]
+            
+            st.markdown(f"#### {student_name} - Total Score: {round(total_score, 2)}/50")
+            st.markdown("### Detailed Question Feedback:")
+            for i, q in enumerate(questions):
+                q_key = f"Q{i+1}"
+                question_feedback = row[f"{q_key}_Feedback"]
+                st.markdown(f"**Q{i+1}: {q['question']}**")
+                st.markdown(f"{question_feedback}")
+            
+            st.markdown("---")
 
-        # Save to database
-        for row in output_data:
-            insert_marks(row["Name"], row["Total_Score"])
+        # Download CSV Results
+        csv = output_df.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Download Results CSV", data=csv, file_name="graded_results.csv", mime="text/csv")
 
-# Run the app
+        # Display database records (optional)
+        st.markdown("DataBase is still in Process")
+        st.markdown("### Student Marks Stored in Database:")
+        db_marks = get_all_marks()
+        db_df = pd.DataFrame(db_marks, columns=["ID", "Name", "Total_Score"])
+        st.write(db_df)
+
+
 if __name__ == "__main__":
     main()
