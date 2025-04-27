@@ -34,7 +34,7 @@ st.markdown("""
 
 # --- LLaMA 3 API Setup ---
 # --- LLaMA 3 API Setup ---
-LLAMA_API_KEY = st.secrets["LLAMA_API_KEY"]  # Fetch API key from Streamlit secrets
+LLAMA_API_KEY = st.secrets["general"]["LLAMA_API_KEY"] # Fetch API key from Streamlit secrets
 LLAMA_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 LLAMA_MODEL = "meta-llama/llama-3-8b-instruct"
 
