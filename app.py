@@ -33,7 +33,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- LLaMA 3 API Setup ---
-LLAMA_API_KEY = "your-api-key-here"  # Replace with your actual LLaMA API key
+LLAMA_API_KEY = st.secrets["genral"]["llama_api_key"]  # Replace with your actual LLaMA API key
 LLAMA_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 LLAMA_MODEL = "meta-llama/llama-3-8b-instruct"
 
@@ -152,8 +152,6 @@ def auto_upload_sample_file():
         return None
 
 # Streamlit page setup
-st.set_page_config(page_title="AutoGrader AI", page_icon="📘", layout="wide")
-
 # Title and description
 st.title("📘 AutoGrader AI - Sample Upload")
 st.markdown("""
